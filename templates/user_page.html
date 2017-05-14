@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>User Homepage</title>
+  <link rel=stylesheet type=text/css href="{{ url_for('static', filename='css/styles.css') }}">
+
+  <script
+    src="https://code.jquery.com/jquery-3.2.1.min.js"
+    integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+    crossorigin="anonymous">
+  </script>
+</head>
+<body>
+<script>
+  var user_id;
+  window.fbAsyncInit = function() {
+    FB.init({
+      appId      : '1294546253973965',  // <<<<< 1. Insert FB app id here
+      cookie     : true,  // enable cookies to allow the server to access
+                          // the session
+      xfbml      : true,  // parse social plugins on this page
+      version    : 'v2.9' // use graph api version 2.8
+    });
+
+    FB.getLoginStatus(function(response) {
+      // Checks login status
+      if (response.status === 'connected') {
+              initAPI();
+      } else {
+              window.location.href = "/";
+      }
+    });
+  };
+  // Load FB Javascript SDK asynchronously
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+
+  function initAPI() {
+    FB.api('/me', { fields: 'name, email' }, function(response) {
+      document.getElementById('status').innerHTML =
+        'Hello ' + response.name ;
+    });
+  }
+
+  // Logout from facebook
+  function fbLogout() {
+    FB.logout(function() {
+      window.location.href = "/";
+    });
+  }
+
+</script>
+
+<script>
+      // This script adds a search box to a map, using the Google Place Autocomplete
+
+      var map;
+      var infowindow;
+      var latitude;
+      var longitude;
+      var place;
+      var places;
+      var start_date;
+      var end_date;
+
+      function callback(results, status) {
+        if (status === google.maps.places.PlacesServiceStatus.OK) {
+          for (var i = 0; i < results.length; i++) {
+            createMarker(results[i], 'B');
+          };
+          createMarker(places[0], 'A');
+        }
+      }
+
+      function createMarker(place, label) {
+        var placeLoc = place.geometry.location;
+        if (label != 'A') {
+          var marker = new google.maps.Marker({
+            map: map,
+            position: place.geometry.location
+          });
+        } else {
+          var marker = new google.maps.Marker({
+            map: map,
+            label: 'A',
+            position: place.geometry.location
+          });
+        }
+        google.maps.event.addListener(marker, 'click', function() {
+          infowindow.setContent(place.name);
+          infowindow.open(map, this);
+        });
+      }
+
+      // This function gets user input place in searchbox and
+      // extracts lat-lng details
+      function initAutocomplete() {
+        // Create the search box and link it to the UI element.
+        var input = document.getElementById('pac-input');
+        var searchBox = new google.maps.places.SearchBox(input);
+
+        // Listen for the event fired when the user selects a prediction and retrieve
+        // more details for that place.
+        searchBox.addListener('places_changed', function() {
+          places = searchBox.getPlaces();
+
+          if (places.length == 0) {
+            return;
+          }
+          place = places[0].name;
+          latitude = places[0].geometry.location.lat();
+          longitude = places[0].geometry.location.lng();
+        });
+
+      }
+
+      // This function is run after submitting start date and end date.
+      // This will call goolge's nearbySearch service and provides nearby
+      // public places to map
+      // This function also calls FB api to get friends data and sends it with
+      // place and date data to backend.
+      // This also gets weather data using Wunderground API
+      function formSubmit() {
+        var start_date = document.getElementById('start-date').value;
+        var end_date = document.getElementById('end-date').value;
+
+        var mapInfo = document.getElementById("mapinfo");
+        mapInfo.innerHTML = "<b>Hotels, Restaurants, Museums nearby</b><br>";
+        var pyrmont = {lat: latitude, lng: longitude};
+
+        map = new google.maps.Map(document.getElementById('map'), {
+          center: pyrmont,
+          zoom: 15
+        });
+
+        infowindow = new google.maps.InfoWindow();
+        var service = new google.maps.places.PlacesService(map);
+        service.nearbySearch({
+          location: pyrmont,
+          radius: 500,
+          type: ['museum', 'restaurant', 'lodging']
+        }, callback);
+
+        FB.api('/me/friends', function(response) {
+          var postData = [{
+            'friends': response.data,
+            'place': place,
+            'start_date': start_date,
+            'end_date': end_date
+          }];
+
+          // Sends data to backend API
+          $.ajax({
+              url: 'http://192.168.100.25:5000/users/' + {{ user }} + '/place',
+              type: 'POST',
+              contentType: 'application/json',
+              data: JSON.stringify( postData ),
+              success: function(fr_data){
+                 buildFriendsList(fr_data.visited_friends);
+              },
+              error: function(){
+                  alert('error');
+              }
+          });
+        });
+
+        // Retrives weather info using Wunderground API
+        $.ajax({
+            url: 'http://api.wunderground.com/api/cba3f1e6d30d7eab/forecast10day/q/' + latitude + ',' + longitude + '.json',
+            type: 'GET',
+            crossDomain: true,
+            dataType: 'jsonp',
+            success: function(weather_data){
+               buildHtmlTable(weather_data.forecast.simpleforecast.forecastday);
+            },
+            error: function(){
+                alert('Failed to fetch weather information for selected city');
+            }
+        });
+
+      }
+
+
+      function buildFriendsList(fr_data) {
+        var friendDiv = document.getElementById("friendDiv");
+        friendDiv.innerHTML = "";
+        var header = document.createElement('b');
+        header.appendChild(document.createTextNode("Your Facebook friends who visited or searched the same location:"));
+        friendDiv.appendChild(header);
+        friendDiv.appendChild(document.createElement('br'));
+        if (fr_data.length == 0) {
+          friendDiv.appendChild(document.createTextNode('N/A'));
+        }
+        for (var i=0; i < fr_data.length; i++) {
+          friendDiv.appendChild(document.createTextNode(fr_data[i]));
+          friendDiv.appendChild(document.createElement('br'));
+        }
+
+      }
+
+      // Builds the HTML Table from weather data.
+      function buildHtmlTable(wt_data) {
+        if (wt_data.length > 0) {
+          var myTableDiv = document.getElementById("myDynamicTable");
+          myTableDiv.innerHTML = "<b>Weather forecast for next 10 days</b><br>";
+          var table = document.createElement('TABLE');
+          table.border='1';
+          table = addAllColumnHeaders(wt_data, table);
+          var d = new Date();
+        }
+        for (var i = 0; i < 10; i++) {
+          var tr = document.createElement('TR');
+          var td1 = document.createElement('TD');
+          td1.appendChild(document.createTextNode(wt_data[i].date.day + '/' + wt_data[i].date.month));
+          tr.appendChild(td1);
+          var td2 = document.createElement('TD');
+          var img = document.createElement('img');
+          img.src = wt_data[i].icon_url;
+          img.alt = wt_data[i].icon;
+          td2.appendChild(img);
+          tr.appendChild(td2);
+
+          if (wt_data[i].high.celsius != "") {
+            var high = wt_data[i].high.celsius;
+          } else {
+            var high = "N/A";
+          }
+
+          if (wt_data[i].low.celsius != "") {
+            var low = wt_data[i].low.celsius;
+          } else {
+            var low = "N/A";
+          }
+
+          var temp = 'High: ' + high + '  Low: ' + low;
+          var td3 = document.createElement('TD');
+          td3.appendChild(document.createTextNode(temp));
+          tr.appendChild(td3);
+
+          table.appendChild(tr);
+        }
+        if (wt_data.length > 0) {
+          myTableDiv.appendChild(table);
+        }
+      }
+
+      // Adds a header row to the table
+      function addAllColumnHeaders(myList, table) {
+        var columnSet = ['Date', 'Weather', 'Temperature(C)'];
+        var tableHeader = document.createElement('TR');
+
+        for (var i = 0; i < 3; i++) {
+          var td = document.createElement('TH');
+          td.appendChild(document.createTextNode(columnSet[i]))
+          tableHeader.appendChild(td);
+
+        }
+        table.appendChild(tableHeader);
+        return table;
+      }
+</script>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBfwiIabi6yaDhKFm82sD2lRI1KvlDDb2M&libraries=places&callback=initAutocomplete"
+         async defer></script>
+
+
+ <!-- Facebook login or logout button -->
+ <input onclick="fbLogout()" type="button" value="Logout" id="fbLink"></input>
+
+ <!-- Display login status -->
+ <div id="status"></div>
+
+<b>Where are you going?</b><input id="pac-input" class="controls" type="text" placeholder="Search Box">
+<br>
+<b>When are you going?</b>
+<form action="javascript:formSubmit()">
+ Starting Date:
+ <input type="date" name="start_date" id="start-date">
+ Ending Date:
+ <input type="date" name="end_date" id="end-date">
+ <input id="submit" type="submit">
+</form>
+<div id="mapinfo"></div>
+<div id="map"></div>
+<div id="myDynamicTable"></div>
+
+<div id="friendDiv"></div>
+</body>
+</html>

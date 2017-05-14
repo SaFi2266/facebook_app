@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Travel Application</title>
+<script
+  src="https://code.jquery.com/jquery-3.2.1.min.js"
+  integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+  crossorigin="anonymous"></script>
+</head>
+<body>
+<script>
+  // This function is called when someone finishes with the Login
+  // Button.
+  function fbLogin() {
+    FB.login(function (response) {
+      if (response.authResponse) {
+        // Get and display the user profile data
+        initAPI();
+
+      } else {
+        document.getElementById('status').innerHTML = 'Please login';
+      }
+    }, {scope: 'public_profile,email,user_friends'});
+  }
+
+  window.fbAsyncInit = function() {
+  FB.init({
+    appId      : '1294546253973965',  // <<<<< 1. Insert FB app id here
+    cookie     : true,  // enable cookies to allow the server to access
+                        // the session
+    xfbml      : true,  // parse social plugins on this page
+    version    : 'v2.9' // use graph api version 2.8
+  });
+
+  FB.getLoginStatus(function(response) {
+    if (response.status === 'connected') {
+            initAPI();
+    }
+  });
+
+  };
+
+  // Load FB SDK asynchronously
+  (function(d, s, id) {
+    var js, fjs = d.getElementsByTagName(s)[0];
+    if (d.getElementById(id)) return;
+    js = d.createElement(s); js.id = id;
+    js.src = "//connect.facebook.net/en_US/sdk.js";
+    fjs.parentNode.insertBefore(js, fjs);
+  }(document, 'script', 'facebook-jssdk'));
+
+  function initAPI() {
+    console.log('Welcome!  Fetching your information.... ');
+    FB.api('/me', { fields: 'name, email' }, function(response) {
+      console.log('Successful login for: ' + response.name);
+      document.getElementById('status').innerHTML =
+        'Thanks for logging in, ' + response.name + '!';
+      var postData = [{'email': response.email, 'name': response.name}];
+      // AJAX call to redirect to user page after successful login
+      $.ajax({
+          url: 'http://192.168.100.25:5000/users',
+          type: 'POST',
+          contentType: 'application/json',
+          data: JSON.stringify( postData ),
+          success: function(id_data){
+             window.location.href = '/users/' + id_data;
+          },
+          //error: function(){
+          //    alert('error');
+          //}
+      });
+    });
+  }
+
+
+
+</script>
+
+<!-- Display login status -->
+<div id="status"></div>
+
+<!-- Facebook login or logout button -->
+<input onclick="fbLogin()" type="button" value="Login" id="fbLink"></input>
+
+
+</body>
+</html>
