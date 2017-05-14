@@ -65,9 +65,9 @@
           success: function(id_data){
              window.location.href = '/users/' + id_data;
           },
-          //error: function(){
-          //    alert('error');
-          //}
+          error: function(){
+              alert('error');
+          }
       });
     });
   }
